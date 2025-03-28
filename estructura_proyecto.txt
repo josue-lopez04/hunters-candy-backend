@@ -1,0 +1,25 @@
+.
+├── estructura_proyecto.txt
+├── package-lock.json
+├── package.json
+└── src
+    ├── .env
+    ├── config
+    │   └── database.js
+    ├── controllers
+    │   ├── address.controller.js
+    │   ├── auth.controller.js
+    │   ├── cart.controller.js
+    │   ├── category.controller.js
+    │   ├── order.controller.js
+    │   └── product.controller.js
+    ├── middlewares
+    │   └── auth.js
+    ├── models
+    │   ├── Address.js
+    │   ├── Cart.js
+    │   ├── Category.js
+    │   ├── Order.js
+    │   ├── Product.js
+    │   └── User.js
+    └── server.js
