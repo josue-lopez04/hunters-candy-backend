@@ -18,27 +18,41 @@ dotenv.config();
 connectDB();
 
 const app = express();
-
-// Crear servidor HTTP
-const server = http.createServer(app);
-
-// Configurar Socket.io
-const io = new Server(server, {
-  cors: {
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST"]
-  }
-});
+const allowedOrigins = [
+  'https://dwp-hunters-candy.vercel.app/', // Tu dominio de frontend en Vercel
+  'http://localhost:3000' // Para desarrollo local
+];
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: function(origin, callback) {
+    // Permitir solicitudes sin origen (como aplicaciones móviles o curl)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'La política CORS para este sitio no permite acceso desde el origen especificado.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
 app.use(express.json());
-app.set('io', io);
-
 
 // Obtener el directorio actual con ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Ruta básica para verificar que el servidor está funcionando
+app.get('/', (req, res) => {
+  res.json({ message: 'API de Hunter\'s Candy está funcionando correctamente' });
+});
+
+// Ruta básica para verificar que la API está funcionando
+app.get('/api', (req, res) => {
+  res.json({ message: 'API de Hunter\'s Candy está funcionando correctamente' });
+});
+
 
 // Rutas API
 app.use('/api/users', userRoutes);
@@ -48,38 +62,52 @@ app.use('/api/orders', orderRoutes);
 // Ruta para cargar imágenes
 app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
 
-// Lógica de WebSockets
-io.on('connection', (socket) => {
-  console.log('Usuario conectado:', socket.id);
-  
-  // Unir a usuario a sala basada en su ID
-  socket.on('join', (userId) => {
-    socket.join(userId);
-    console.log(`Usuario ${userId} unido a su sala personal`);
-  });
-  
-  // Escuchar eventos de actualización de órdenes
-  socket.on('orderUpdated', (data) => {
-    console.log('Orden actualizada:', data);
-    io.to(data.userId).emit('orderStatusChanged', data);
-  });
-  
-  // Notificación de stock bajo
-  socket.on('lowStock', (data) => {
-    io.emit('stockAlert', data);
-  });
-  
-  socket.on('disconnect', () => {
-    console.log('Usuario desconectado:', socket.id);
-  });
-});
-
 // Middleware para manejar errores
 app.use(notFound);
 app.use(errorHandler);
 
-// Puerto y arranque del servidor
+// Crear servidor HTTP solo si no está en producción
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
-});
+let server;
+if (process.env.NODE_ENV !== 'production') {
+  server = http.createServer(app);
+  server.listen(PORT, () => {
+    console.log(`Servidor corriendo en puerto ${PORT}`);
+  });
+
+  // Configurar Socket.io
+  const io = new Server(server, {
+    cors: {
+      origin: "http://localhost:3000",
+      methods: ["GET", "POST"]
+    }
+  });
+
+  app.set('io', io);
+
+  io.on('connection', (socket) => {
+    console.log('Usuario conectado:', socket.id);
+    
+    socket.on('join', (userId) => {
+      socket.join(userId);
+      console.log(`Usuario ${userId} unido a su sala personal`);
+    });
+    
+    socket.on('orderUpdated', (data) => {
+      console.log('Orden actualizada:', data);
+      io.to(data.userId).emit('orderStatusChanged', data);
+    });
+    
+    socket.on('lowStock', (data) => {
+      io.emit('stockAlert', data);
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('Usuario desconectado:', socket.id);
+    });
+  });
+}
+
+
+// Exportar la app para Vercel
+export default app;
