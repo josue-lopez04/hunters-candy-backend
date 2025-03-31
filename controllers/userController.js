@@ -252,14 +252,9 @@ const updateUserAddress = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Solicitar recuperación de contraseña
-// @route   POST /api/users/forgot-password
-// @access  Public
+
 const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
-  
-  // Log para debugging
-  console.log(`Solicitud de recuperación para email: ${email}`);
   
   if (!email) {
     res.status(400);
@@ -271,16 +266,12 @@ const forgotPassword = asyncHandler(async (req, res) => {
     const user = await User.findOne({ email });
     
     if (!user) {
-      console.log(`Usuario no encontrado para email: ${email}`);
       res.status(404);
       throw new Error('No existe una cuenta con ese correo electrónico');
     }
     
-    console.log(`Usuario encontrado: ${user.email}`);
-    
     // Generar token aleatorio
     const resetToken = crypto.randomBytes(20).toString('hex');
-    console.log(`Token generado: ${resetToken}`);
     
     // Guardar token hasheado en la base de datos
     user.resetPasswordToken = crypto
@@ -292,16 +283,19 @@ const forgotPassword = asyncHandler(async (req, res) => {
     user.resetPasswordExpire = Date.now() + 3600000; // 1 hora
     
     await user.save();
-    console.log('Token guardado en la base de datos');
     
-    // Enviar email con el token
+    // Enviar email con el servicio de email
     try {
       await emailService.sendPasswordResetEmail(
         user.email,
         resetToken,
         user.firstName || user.username
       );
-      console.log('Correo enviado correctamente');
+      
+      res.status(200).json({
+        success: true,
+        message: 'Correo electrónico enviado correctamente'
+      });
     } catch (emailError) {
       console.error('Error al enviar correo:', emailError);
       
@@ -313,11 +307,6 @@ const forgotPassword = asyncHandler(async (req, res) => {
       res.status(500);
       throw new Error('Error al enviar el correo electrónico. Por favor, intenta de nuevo más tarde.');
     }
-    
-    res.status(200).json({
-      success: true,
-      message: 'Correo electrónico enviado correctamente'
-    });
   } catch (error) {
     console.error('Error en forgotPassword:', error);
     
