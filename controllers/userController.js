@@ -5,7 +5,7 @@ import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
-import emailService from '../../src/services/emailService.js';
+import emailService from '../src/services/emailService.js';
 
 
 // Función para generar el token JWT
