@@ -1,3 +1,4 @@
+// Modified server.js with proper CORS configuration
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -19,24 +20,46 @@ connectDB();
 
 const app = express();
 const allowedOrigins = [
-  'https://dwp-hunters-candy.vercel.app/', // Tu dominio de frontend en Vercel
+  'https://dwp-hunters-candy.vercel.app', // Tu dominio de frontend en Vercel
   'http://localhost:3000' // Para desarrollo local
 ];
 
-// Middleware
+// Configuración CORS mejorada
 app.use(cors({
   origin: function(origin, callback) {
     // Permitir solicitudes sin origen (como aplicaciones móviles o curl)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'La política CORS para este sitio no permite acceso desde el origen especificado.';
-      return callback(new Error(msg), false);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('No permitido por CORS'));
     }
-    return callback(null, true);
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
 }));
+
+// Configurar headers para todas las rutas
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Manejar las solicitudes OPTIONS para preflight CORS
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
+// Middleware
 app.use(express.json());
 
 // Obtener el directorio actual con ES modules
@@ -53,7 +76,6 @@ app.get('/api', (req, res) => {
   res.json({ message: 'API de Hunter\'s Candy está funcionando correctamente' });
 });
 
-
 // Rutas API
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
@@ -66,48 +88,47 @@ app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
 app.use(notFound);
 app.use(errorHandler);
 
-// Crear servidor HTTP solo si no está en producción
+// Crear servidor HTTP
 const PORT = process.env.PORT || 5000;
-let server;
-if (process.env.NODE_ENV !== 'production') {
-  server = http.createServer(app);
-  server.listen(PORT, () => {
-    console.log(`Servidor corriendo en puerto ${PORT}`);
+const server = http.createServer(app);
+
+// Iniciar el servidor
+server.listen(PORT, () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
+});
+
+// Configurar Socket.io con CORS adecuado
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+app.set('io', io);
+
+io.on('connection', (socket) => {
+  console.log('Usuario conectado:', socket.id);
+  
+  socket.on('join', (userId) => {
+    socket.join(userId);
+    console.log(`Usuario ${userId} unido a su sala personal`);
   });
-
-  // Configurar Socket.io
-  const io = new Server(server, {
-    cors: {
-      origin: "http://localhost:3000",
-      methods: ["GET", "POST"]
-    }
+  
+  socket.on('orderUpdated', (data) => {
+    console.log('Orden actualizada:', data);
+    io.to(data.userId).emit('orderStatusChanged', data);
   });
-
-  app.set('io', io);
-
-  io.on('connection', (socket) => {
-    console.log('Usuario conectado:', socket.id);
-    
-    socket.on('join', (userId) => {
-      socket.join(userId);
-      console.log(`Usuario ${userId} unido a su sala personal`);
-    });
-    
-    socket.on('orderUpdated', (data) => {
-      console.log('Orden actualizada:', data);
-      io.to(data.userId).emit('orderStatusChanged', data);
-    });
-    
-    socket.on('lowStock', (data) => {
-      io.emit('stockAlert', data);
-    });
-    
-    socket.on('disconnect', () => {
-      console.log('Usuario desconectado:', socket.id);
-    });
+  
+  socket.on('lowStock', (data) => {
+    io.emit('stockAlert', data);
   });
-}
-
+  
+  socket.on('disconnect', () => {
+    console.log('Usuario desconectado:', socket.id);
+  });
+});
 
 // Exportar la app para Vercel
 export default app;
