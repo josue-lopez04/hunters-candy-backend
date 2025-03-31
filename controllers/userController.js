@@ -5,7 +5,7 @@ import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
-
+import emailService from '../../src/services/emailService.js';
 
 
 // Función para generar el token JWT
@@ -258,121 +258,140 @@ const updateUserAddress = asyncHandler(async (req, res) => {
 const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
   
+  // Log para debugging
+  console.log(`Solicitud de recuperación para email: ${email}`);
+  
   if (!email) {
     res.status(400);
     throw new Error('Por favor proporcione un correo electrónico');
   }
   
-  // Buscar usuario por email
-  const user = await User.findOne({ email });
-  
-  if (!user) {
-    res.status(404);
-    throw new Error('No existe una cuenta con ese correo electrónico');
-  }
-  
-  // Generar token aleatorio
-  const resetToken = crypto.randomBytes(20).toString('hex');
-  
-  // Guardar token hasheado en la base de datos
-  user.resetPasswordToken = crypto
-    .createHash('sha256')
-    .update(resetToken)
-    .digest('hex');
-    
-  // Establecer expiración (1 hora)
-  user.resetPasswordExpire = Date.now() + 3600000; // 1 hora
-  
-  await user.save();
-  
-  // Configurar transporte de correo
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: 'josuelopezhernandez112@gmail.com',
-      pass: 'zawh elwn olpv vdoi'
-    }
-  });
-  
-  // URL de reseteo (frontend)
-  const resetUrl = `http://localhost:3000/reset-password/${resetToken}`;
-  
-  // Mensaje de correo
-  const message = `
-    Has solicitado recuperar tu contraseña.
-    
-    Por favor, haz clic en el siguiente enlace para restablecer tu contraseña:
-    
-    ${resetUrl}
-    
-    Este enlace expirará en 1 hora.
-    
-    Si no solicitaste este cambio, puedes ignorar este correo electrónico.
-  `;
-  
   try {
-    await transporter.sendMail({
-      to: user.email,
-      from: 'josuelopezhernandez112@gmail.com',
-      subject: 'Recuperación de contraseña - Hunter\'s Candy',
-      text: message
-    });
+    // Buscar usuario por email
+    const user = await User.findOne({ email });
+    
+    if (!user) {
+      console.log(`Usuario no encontrado para email: ${email}`);
+      res.status(404);
+      throw new Error('No existe una cuenta con ese correo electrónico');
+    }
+    
+    console.log(`Usuario encontrado: ${user.email}`);
+    
+    // Generar token aleatorio
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    console.log(`Token generado: ${resetToken}`);
+    
+    // Guardar token hasheado en la base de datos
+    user.resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+      
+    // Establecer expiración (1 hora)
+    user.resetPasswordExpire = Date.now() + 3600000; // 1 hora
+    
+    await user.save();
+    console.log('Token guardado en la base de datos');
+    
+    // Enviar email con el token
+    try {
+      await emailService.sendPasswordResetEmail(
+        user.email,
+        resetToken,
+        user.firstName || user.username
+      );
+      console.log('Correo enviado correctamente');
+    } catch (emailError) {
+      console.error('Error al enviar correo:', emailError);
+      
+      // Limpiar el token si hay error al enviar el correo
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save();
+      
+      res.status(500);
+      throw new Error('Error al enviar el correo electrónico. Por favor, intenta de nuevo más tarde.');
+    }
     
     res.status(200).json({
       success: true,
       message: 'Correo electrónico enviado correctamente'
     });
   } catch (error) {
-    console.error('Error al enviar correo:', error);
+    console.error('Error en forgotPassword:', error);
     
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-    await user.save();
-    
-    res.status(500);
-    throw new Error('Error al enviar el correo electrónico. Por favor, intenta de nuevo más tarde.');
+    res.status(error.statusCode || 500);
+    throw new Error(error.message || 'Error al procesar la solicitud de recuperación de contraseña.');
   }
 });
 // @desc    Resetear contraseña
-// @route   PUT /api/users/reset-password/:resetToken
+// @route   POST /api/users/reset-password/:resetToken
 // @access  Public
 const resetPassword = asyncHandler(async (req, res) => {
   const { password } = req.body;
   const { resetToken } = req.params;
+  
+  // Log para debugging
+  console.log(`Solicitud de reseteo de contraseña para token: ${resetToken}`);
   
   if (!password) {
     res.status(400);
     throw new Error('Por favor proporcione una nueva contraseña');
   }
   
-  // Hashear token
-  const resetPasswordToken = crypto
-    .createHash('sha256')
-    .update(resetToken)
-    .digest('hex');
-  
-  // Buscar usuario por token y verificar que no haya expirado
-  const user = await User.findOne({
-    resetPasswordToken,
-    resetPasswordExpire: { $gt: Date.now() }
-  });
-  
-  if (!user) {
-    res.status(400);
-    throw new Error('Token inválido o expirado');
+  try {
+    // Hashear token
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+    
+    console.log(`Token hasheado: ${resetPasswordToken}`);
+    
+    // Buscar usuario por token y verificar que no haya expirado
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+    
+    if (!user) {
+      console.log('No se encontró usuario con el token proporcionado o el token ha expirado');
+      res.status(400);
+      throw new Error('Token inválido o expirado');
+    }
+    
+    console.log(`Usuario encontrado: ${user.email}`);
+    
+    // Establecer nueva contraseña
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    
+    await user.save();
+    console.log('Contraseña actualizada correctamente');
+    
+    // Enviar confirmación por email
+    try {
+      await emailService.sendPasswordChangedEmail(
+        user.email,
+        user.firstName || user.username
+      );
+      console.log('Correo de confirmación enviado');
+    } catch (emailError) {
+      // No fallamos toda la operación si hay error en el envío del correo
+      console.error('Error al enviar correo de confirmación:', emailError);
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: 'Contraseña restablecida correctamente'
+    });
+  } catch (error) {
+    console.error('Error en resetPassword:', error);
+    res.status(500);
+    throw new Error('Error al restablecer la contraseña. Por favor, intenta de nuevo más tarde.');
   }
-  
-  // Establecer nueva contraseña
-  user.password = password;
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpire = undefined;
-  
-  await user.save();
-  
-  res.status(200).json({
-    success: true,
-    message: 'Contraseña restablecida correctamente'
-  });
 });
 // @desc    Eliminar una dirección del usuario
 // @route   DELETE /api/users/addresses/:id
