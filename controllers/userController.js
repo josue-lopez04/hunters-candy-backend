@@ -38,7 +38,8 @@ const registerUser = asyncHandler(async (req, res) => {
     password,
     firstName: firstName || '',
     lastName: lastName || '',
-    phone: phone || ''
+    phone: phone || '',
+    mfaEnabled: false // Inicializar MFA como desactivado
   });
 
   if (user) {
@@ -49,6 +50,7 @@ const registerUser = asyncHandler(async (req, res) => {
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone,
+      mfaEnabled: user.mfaEnabled,
       token: generateToken(user._id)
     });
   } else {
@@ -57,9 +59,6 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Autenticar usuario y obtener token
-// @route   POST /api/users/login
-// @access  Public
 // @desc    Autenticar usuario y obtener token
 // @route   POST /api/users/login
 // @access  Public
@@ -73,7 +72,7 @@ const loginUser = asyncHandler(async (req, res) => {
   }
 
   // Buscar el usuario en la BD
-  const user = await User.findOne({ username }).select('+password');
+  const user = await User.findOne({ username }).select('+password +mfaSecret +mfaEnabled');
 
   // Verificar si el usuario existe y la contraseña es correcta
   if (user && (await user.matchPassword(password))) {
@@ -93,6 +92,7 @@ const loginUser = asyncHandler(async (req, res) => {
       email: user.email,
       firstName: user.firstName || '',
       lastName: user.lastName || '',
+      mfaEnabled: user.mfaEnabled,
       token: generateToken(user._id)
     });
   } else {
@@ -116,6 +116,7 @@ const getUserProfile = asyncHandler(async (req, res) => {
       lastName: user.lastName || '',
       phone: user.phone || '',
       addresses: user.addresses || [],
+      mfaEnabled: user.mfaEnabled || false,
       createdAt: user.createdAt
     });
   } else {
@@ -150,6 +151,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
       firstName: updatedUser.firstName || '',
       lastName: updatedUser.lastName || '',
       phone: updatedUser.phone || '',
+      mfaEnabled: updatedUser.mfaEnabled || false,
       token: generateToken(updatedUser._id)
     });
   } else {
@@ -413,6 +415,7 @@ const deleteUserAddress = asyncHandler(async (req, res) => {
     throw new Error('Usuario no encontrado');
   }
 });
+
 const setupMFA = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id);
   
@@ -431,12 +434,18 @@ const setupMFA = asyncHandler(async (req, res) => {
   await user.save();
   
   // Generar código QR
-  const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
-  
-  res.json({
-    secret: secret.base32,
-    qrCodeUrl
-  });
+  try {
+    const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
+    
+    res.json({
+      secret: secret.base32,
+      qrCodeUrl
+    });
+  } catch (error) {
+    console.error('Error al generar código QR:', error);
+    res.status(500);
+    throw new Error('Error al generar código QR para MFA');
+  }
 });
 
 // @desc    Verificar y activar MFA
@@ -457,12 +466,19 @@ const verifyAndEnableMFA = asyncHandler(async (req, res) => {
     throw new Error('MFA no configurado correctamente');
   }
   
+  console.log(`Verificando token MFA para usuario: ${user.username}`);
+  console.log(`Secret: ${user.mfaSecret}`);
+  console.log(`Token: ${token}`);
+  
   // Verificar token
   const verified = speakeasy.totp.verify({
     secret: user.mfaSecret,
     encoding: 'base32',
-    token
+    token,
+    window: 1 // Permite un token anterior o posterior
   });
+  
+  console.log(`Resultado de verificación: ${verified}`);
   
   if (!verified) {
     res.status(400);
@@ -472,6 +488,8 @@ const verifyAndEnableMFA = asyncHandler(async (req, res) => {
   // Activar MFA
   user.mfaEnabled = true;
   await user.save();
+  
+  console.log(`MFA activado para usuario: ${user.username}`);
   
   res.json({
     success: true,
@@ -492,6 +510,11 @@ const disableMFA = asyncHandler(async (req, res) => {
   
   const user = await User.findById(req.user._id).select('+password +mfaSecret');
   
+  if (!user) {
+    res.status(404);
+    throw new Error('Usuario no encontrado');
+  }
+  
   // Verificar contraseña
   const isMatch = await user.matchPassword(password);
   if (!isMatch) {
@@ -503,7 +526,8 @@ const disableMFA = asyncHandler(async (req, res) => {
   const verified = speakeasy.totp.verify({
     secret: user.mfaSecret,
     encoding: 'base32',
-    token
+    token,
+    window: 1 // Permite un token anterior o posterior
   });
   
   if (!verified) {
@@ -513,7 +537,6 @@ const disableMFA = asyncHandler(async (req, res) => {
   
   // Desactivar MFA
   user.mfaEnabled = false;
-  user.mfaSecret = undefined;
   await user.save();
   
   res.json({
@@ -533,12 +556,21 @@ const validateMFA = asyncHandler(async (req, res) => {
     throw new Error('Se requiere usuario y token');
   }
   
-  const user = await User.findOne({ username }).select('+mfaSecret');
+  // Buscar el usuario con el mfaSecret
+  const user = await User.findOne({ username }).select('+mfaSecret +mfaEnabled');
   
   if (!user) {
     res.status(401);
     throw new Error('Credenciales inválidas');
   }
+  
+  if (!user.mfaEnabled || !user.mfaSecret) {
+    res.status(400);
+    throw new Error('El usuario no tiene MFA habilitado');
+  }
+  
+  console.log(`Validando MFA para login de usuario: ${username}`);
+  console.log(`Token proporcionado: ${token}`);
   
   // Verificar token MFA
   const verified = speakeasy.totp.verify({
@@ -547,6 +579,8 @@ const validateMFA = asyncHandler(async (req, res) => {
     token,
     window: 1 // Permite un token anterior o posterior
   });
+  
+  console.log(`Resultado de verificación MFA: ${verified}`);
   
   if (!verified) {
     res.status(401);
@@ -560,9 +594,11 @@ const validateMFA = asyncHandler(async (req, res) => {
     email: user.email,
     firstName: user.firstName || '',
     lastName: user.lastName || '',
+    mfaEnabled: user.mfaEnabled,
     token: generateToken(user._id)
   });
 });
+
 
 export {
   registerUser,
@@ -570,7 +606,6 @@ export {
   getUserProfile,
   updateUserProfile,
   addUserAddress,
-  updateUserAddress,
   deleteUserAddress,
   setupMFA,
   verifyAndEnableMFA,

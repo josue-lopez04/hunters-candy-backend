@@ -5,7 +5,6 @@ import {
   getUserProfile,
   updateUserProfile,
   addUserAddress,
-  updateUserAddress,
   deleteUserAddress,
   setupMFA,
   verifyAndEnableMFA,
@@ -45,10 +44,9 @@ router.route('/addresses')
   .post(protect, addUserAddress);
 
 router.route('/addresses/:id')
-  .put(protect, updateUserAddress)
   .delete(protect, deleteUserAddress);
 
 router.post('/forgot-password', forgotPassword);
-router.put('/reset-password/:resetToken', resetPassword);
+router.post('/reset-password/:resetToken', resetPassword);
 
 export default router;
