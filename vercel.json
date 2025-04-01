@@ -5,5 +5,14 @@
   ],
   "routes": [
     { "src": "/(.*)", "dest": "/server.js" }
+  ],
+  "headers": [
+    {
+      "source": "/ws",
+      "headers": [
+        { "key": "Upgrade", "value": "websocket" },
+        { "key": "Connection", "value": "Upgrade" }
+      ]
+    }
   ]
 }
