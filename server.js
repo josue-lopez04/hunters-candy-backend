@@ -20,9 +20,11 @@ connectDB();
 
 const app = express();
 const allowedOrigins = [
-  'https://dwp-hunters-candy.vercel.app', // Tu dominio de frontend en Vercel
-  'http://localhost:3000' // Para desarrollo local
+  'https://dwp-hunters-candy.vercel.app', 
+  'http://localhost:3000',
+  '*'
 ];
+
 
 // Configuración CORS mejorada
 app.use(cors({
