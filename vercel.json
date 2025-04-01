@@ -1,15 +1,32 @@
 {
   "version": 2,
   "builds": [
-    { "src": "server.js", "use": "@vercel/node" }
+    { 
+      "src": "server.js", 
+      "use": "@vercel/node" 
+    }
   ],
-  "routes": [
-    { "src": "/(.*)", "dest": "/server.js" }
+  "rewrites": [
+    { 
+      "source": "/ws", 
+      "destination": "/server.js" 
+    },
+    { 
+      "source": "/api/(.*)", 
+      "destination": "/server.js" 
+    },
+    { 
+      "source": "/(.*)", 
+      "destination": "/server.js" 
+    }
   ],
   "headers": [
     {
       "source": "/ws",
       "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Origin, X-Requested-With, Content-Type, Accept" },
         { "key": "Upgrade", "value": "websocket" },
         { "key": "Connection", "value": "Upgrade" }
       ]
