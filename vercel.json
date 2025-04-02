@@ -17,26 +17,7 @@
     },
     { 
       "src": "/(.*)", 
-      "dest": "/server.js" 
-    }
-  ],
-  "rewrites": [
-    { 
-      "source": "/ws", 
-      "destination": "/server.js" 
-    },
-    { 
-      "source": "/api/(.*)", 
-      "destination": "/server.js" 
-    },
-    { 
-      "source": "/(.*)", 
-      "destination": "/server.js" 
-    }
-  ],
-  "headers": [
-    {
-      "source": "/ws",
+      "dest": "/server.js" ,
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
@@ -46,4 +27,6 @@
       ]
     }
   ]
+
+
 }
