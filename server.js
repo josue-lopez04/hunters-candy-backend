@@ -26,23 +26,23 @@ const allowedOrigins = [
 ];
 
 
-// Configuración CORS mejorada
 app.use(cors({
-/*   origin: function(origin, callback) {
+  origin: function(origin, callback) {
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log('Origen bloqueado por CORS:', origin);
       callback(new Error('Not allowed by CORS'));
     }
-  }, */
-  origin: allowedOrigins,
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
 }));
 
+app.options('*', cors());
 
 // Configurar headers para todas las rutas
 app.use((req, res, next) => {
@@ -59,7 +59,7 @@ app.use((req, res, next) => {
   }
   
   next();
-}); 
+});
 
 // Middleware
 app.use(express.json());
