@@ -75,7 +75,7 @@ app.get('/', (req, res) => {
 
 // Ruta básica para verificar que la API está funcionando
 app.get('/api', (req, res) => {
-  res.json({ message: 'API de Hunter\'s Candy está funcionando correctamente' });
+  res.json({ message: 'API de Hunter\'s Candy está funcionando correctamente Now 1 april' });
 });
 
 // Rutas API
