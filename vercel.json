@@ -8,23 +8,16 @@
   ],
   "routes": [
     { 
-      "src": "/ws", 
-      "dest": "/server.js" 
-    },
-    { 
-      "src": "/api/(.*)", 
-      "dest": "/server.js" 
-    },
-    { 
       "src": "/(.*)", 
       "dest": "/server.js" ,
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Origin, X-Requested-With, Content-Type, Accept" },
-        { "key": "Upgrade", "value": "websocket" },
-        { "key": "Connection", "value": "Upgrade" }
-      ]
+      "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      "headers": { 
+        "Access-Control-Allow-Origin": "*" ,
+        "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Content-Type, Accept, Accept-Version, Content-Length, Content-MD5, Authorization, X-Api-Version, X-Client-Version," ,
+        "Access-Control-Allow-Credentials": "true" ,
+        "Upgrade": "websocket" ,
+        "Connection": "Upgrade" 
+        }
     }
   ]
 
