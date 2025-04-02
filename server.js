@@ -20,8 +20,8 @@ connectDB();
 
 const app = express();
 const allowedOrigins = [
-  'https://dwp-hunters-candy.vercel.app', 
-  'http://localhost:3000',
+//  'https://dwp-hunters-candy.vercel.app', 
+//  'http://localhost:3000',
   '*'
 ];
 
